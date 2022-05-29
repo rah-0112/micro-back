@@ -1,16 +1,33 @@
 // require('@tensorflow/tfjs-node');
-const express = require('express');
-const cors = require('cors');
-const faceapi = require("face-api.js");
-const mongoose = require("mongoose");
-const { Canvas, Image } = require("canvas");
-const canvas = require("canvas");
-const fileUpload = require("express-fileupload");
 
-faceapi.env.monkeyPatch({ Canvas, Image })
+// import adminRoutes from './routes/admin';
+// import studentRoutes from './routes/student';
+import express from "express";
+import cors from "cors";
+import faceapi from "face-api.js";
+import mongoose from "mongoose"
+import pkg from 'canvas';
+const { Canvas, Image } = pkg;
+import canvas from "canvas";
+import fileUpload from "express-fileupload";
+
+import dotenv from 'dotenv';
+import bodyParser from 'body-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+import FaceModel from './mongoose_models/faceModel.js';
+import StudentModel from './mongoose_models/studentModel.js';
+
+
+faceapi.env.monkeyPatch({ Canvas, Image });
+const __filename = fileURLToPath(import.meta.url);
 
 const app = express();
+dotenv.config();
 
+app.use(bodyParser.json({ limit: '30mb', extended: true }));
+app.use(bodyParser.urlencoded({ limit: '30mb', extended: true }));
 app.use(cors());
 app.use(
     fileUpload({
@@ -21,11 +38,16 @@ app.use(
 async function LoadModels() {
     // Load the models
     // __dirname gives the root directory of the server
+    const __dirname = path.dirname(__filename);
     await faceapi.nets.faceRecognitionNet.loadFromDisk(__dirname + "/models");
     await faceapi.nets.faceLandmark68Net.loadFromDisk(__dirname + "/models");
     await faceapi.nets.ssdMobilenetv1.loadFromDisk(__dirname + "/models");
 }
 LoadModels();
+
+// app.use('/ad', adminRoutes);
+// app.use('/st', studentRoutes);
+
 
 async function uploadLabeledImages(images, label) {
     try {
@@ -82,25 +104,6 @@ async function getDescriptorsFromDB(image) {
     return results;
 }
 
-
-const faceSchema = new mongoose.Schema({
-    label: {
-        type: String,
-        required: true,
-        unique: true
-    },
-    descriptions: {
-        type: Array,
-        required: true
-    }
-});
-
-const FaceModel = mongoose.model("Face", faceSchema);
-
-app.get('/', (req, res) => {
-    res.status(200).send('Hello');
-})
-
 app.post("/post-face", async (req, res) => {
     const File1 = req.files.File1.tempFilePath
     const File2 = req.files.File2.tempFilePath
@@ -108,21 +111,31 @@ app.post("/post-face", async (req, res) => {
     const label = req.body.label
     let result = await uploadLabeledImages([ File1, File2, File3 ], label);
     if (result) {
-
         res.json({ message: "Face data stored successfully" })
     } else {
         res.json({ message: "Something went wrong, please try again." })
-
     }
 })
 
 app.post("/check-face", async (req, res) => {
-
     const File1 = req.files.File1.tempFilePath;
     let result = await getDescriptorsFromDB(File1);
-    res.json({ result });
+    // let result = "Rahul Gunaseelan";
+    console.log({ result });
 
+    StudentModel.findOne({ name: result[ 0 ].label })
+        .then((stud) => {
+            if (stud !== null) {
+                stud.noOfDays = stud.noOfDays + 1;
+                const updated = StudentModel.findByIdAndUpdate(stud._id, stud, { new: true });
+                res.json({ updated });
+            }
+        })
 });
+
+app.get('/', (req, res) => {
+    res.status(200).send('Hello');
+})
 
 const CONNECTION_URL = 'mongodb+srv://rahul:A5U5n3GKyrDomEBZ@cluster0.aerwvyn.mongodb.net/?retryWrites=true&w=majority';
 mongoose.connect(
