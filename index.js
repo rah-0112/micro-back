@@ -1,7 +1,6 @@
 // require('@tensorflow/tfjs-node');
-
-// import adminRoutes from './routes/admin';
-// import studentRoutes from './routes/student';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import express from "express";
 import cors from "cors";
 import faceapi from "face-api.js";
@@ -16,9 +15,12 @@ import bodyParser from 'body-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import FaceModel from './mongoose_models/faceModel.js';
-import StudentModel from './mongoose_models/studentModel.js';
+import Face from './mongoose_models/faceModel.js';
+import Student from './mongoose_models/studentModel.js';
+import Admin from './mongoose_models/adminModel.js';
 
+const router1 = express.Router();
+const router2 = express.Router();
 
 faceapi.env.monkeyPatch({ Canvas, Image });
 const __filename = fileURLToPath(import.meta.url);
@@ -35,6 +37,9 @@ app.use(
     })
 );
 
+app.use('/ad', router1);
+app.use('/st', router2);
+
 async function LoadModels() {
     // Load the models
     // __dirname gives the root directory of the server
@@ -45,9 +50,119 @@ async function LoadModels() {
 }
 LoadModels();
 
-// app.use('/ad', adminRoutes);
-// app.use('/st', studentRoutes);
 
+const signinAd = async (req, res) => {
+
+    const { email, password } = req.body;
+    try {
+        const existingUser = await Admin.findOne({ email });
+
+        if (!existingUser) return res.status(404).json({ message: "User doesn't exist." });
+
+        const isPasswordCorrect = await bcrypt.compare(password, existingUser.password);
+
+        if (!isPasswordCorrect) return res.status(400).json({ message: "Wrong Credentials." });
+
+        const token = jwt.sign({ email: existingUser.email, id: existingUser._id }, 'test', { expiresIn: '1h' });
+
+        res.status(200).json({ result: existingUser, token });
+
+    } catch (error) {
+        res.status(500).json({ message: "Something went Wrong." });
+    }
+}
+
+const signupAd = async (req, res) => {
+    const { firstname, lastname, email, password, confirmPassword, noOfClasses } = req.body;
+
+    try {
+        const existingUser = await Admin.findOne({ email });
+
+        if (existingUser) return res.status(404).json({ message: "User already exist." });
+
+        if (password !== confirmPassword) return res.status(400).json({ message: "Password don't match." });
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        const result = await Admin.create({ email, password: hashedPassword, name: `${firstname} ${lastname}`, noOfClasses });
+
+        const token = jwt.sign({ email: result.email, id: result._id }, 'test', { expiresIn: '1h' });
+        res.status(200).json({ result, token });
+
+    } catch (error) {
+        res.status(500).json({ message: "Something went Wrong." });
+    }
+}
+
+const students = async (req, res) => {
+    const { adminEmail } = req.body;
+    const admin = await Admin.findOne({ email: adminEmail });
+    await Student.find({ admin })
+        .then(
+            (students) => {
+                res.statusCode = 200;
+                res.setHeader("Content-Type", "application/json");
+                res.json(students);
+            },
+            (err) => next(err)
+        )
+        .catch((err) => next(err));
+}
+
+const signin = async (req, res) => {
+
+    const { email, password } = req.body;
+    try {
+        const existingUser = await Student.findOne({ email });
+
+        if (!existingUser) return res.status(404).json({ message: "User doesn't exist." });
+
+        const isPasswordCorrect = await bcrypt.compare(password, existingUser.password);
+
+        if (!isPasswordCorrect) return res.status(400).json({ message: "Wrong Credentials." });
+
+        const token = jwt.sign({ email: existingUser.email, id: existingUser._id }, 'test', { expiresIn: '1h' });
+
+        res.status(200).json({ result: existingUser, token });
+
+    } catch (error) {
+        res.status(500).json({ message: "Something went Wrong." });
+    }
+}
+
+const signup = async (req, res) => {
+    const { firstname, lastname, email, password, confirmPassword, adminEmail } = req.body;
+
+    try {
+        const existingUser = await Student.findOne({ email });
+
+        if (existingUser) return res.status(404).json({ message: "User already exist." });
+
+        if (password !== confirmPassword) return res.status(400).json({ message: "Password don't match." });
+
+        const hashedPassword = await bcrypt.hash(password, 12);
+
+        const admin_id = await Admin.findOne({ email: adminEmail });
+
+        const face_id = await Face.findOne({ label: `${firstname} ${lastname}` });
+
+        const result = await Student.create({ email, password: hashedPassword, name: `${firstname} ${lastname}`, admin: admin_id, face: face_id });
+
+        const token = jwt.sign({ email: result.email, id: result._id }, 'test', { expiresIn: '1h' });
+
+        res.status(200).json({ result, token });
+
+    } catch (error) {
+        res.status(500).json({ message: "Something went Wrong." });
+    }
+}
+
+router1.post('/signin', signinAd);
+router1.post('/signup', signupAd);
+router1.post('/students', students);
+
+router2.post('/signin', signin);
+router2.post('/signup', signup);
 
 async function uploadLabeledImages(images, label) {
     try {
@@ -62,7 +177,7 @@ async function uploadLabeledImages(images, label) {
         }
 
         // Create a new face document with the given label and save it in DB
-        const createFace = new FaceModel({
+        const createFace = new Face({
             label: label,
             descriptions: descriptions,
         });
@@ -77,10 +192,10 @@ async function uploadLabeledImages(images, label) {
 
 async function getDescriptorsFromDB(image) {
     // Get all the face data from mongodb and loop through each of them to read the data
-    let faces = await FaceModel.find();
-    for (i = 0; i < faces.length; i++) {
+    let faces = await Face.find();
+    for (let i = 0; i < faces.length; i++) {
         // Change the face data descriptors from Objects to Float32Array type
-        for (j = 0; j < faces[ i ].descriptions.length; j++) {
+        for (let j = 0; j < faces[ i ].descriptions.length; j++) {
             faces[ i ].descriptions[ j ] = new Float32Array(Object.values(faces[ i ].descriptions[ j ]));
         }
         // Turn the DB face docs to
@@ -122,15 +237,16 @@ app.post("/check-face", async (req, res) => {
     let result = await getDescriptorsFromDB(File1);
     // let result = "Rahul Gunaseelan";
     console.log({ result });
+    // console.log({ name: result[ 0 ].label });
 
-    StudentModel.findOne({ name: result[ 0 ].label })
-        .then((stud) => {
-            if (stud !== null) {
-                stud.noOfDays = stud.noOfDays + 1;
-                const updated = StudentModel.findByIdAndUpdate(stud._id, stud, { new: true });
-                res.json({ updated });
-            }
-        })
+    // Student.findOne({ name: result[ 0 ].label })
+    //     .then((stud) => {
+    //         if (stud !== null) {
+    //             stud.noOfDays = stud.noOfDays + 1;
+    //             const updated = StudentModel.findByIdAndUpdate(stud._id, stud, { new: true });
+    //             res.json({ updated });
+    //         }
+    //     })
 });
 
 app.get('/', (req, res) => {

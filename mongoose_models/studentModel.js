@@ -23,18 +23,14 @@ const studentSchema = new Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Admin'
     },
-    face: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Face'
-    },
-    noOfDays: {
-        type: Number,
-        default: 0,
-    }
+    courses: [ {
+        courseName: { type: String },
+        attendedDays: { type: Number, default: 0 }
+    } ]
 }, {
     timestamps: true
 });
 
-export default mongoose.model('Student', studentSchema);
-
+const Student = mongoose.model('Student', studentSchema);
+export default Student;
 

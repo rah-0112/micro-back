@@ -1,6 +1,3 @@
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-
 import Admin from '../mongoose_models/adminModel';
 import Student from '../mongoose_model/studentModel';
 

@@ -10,9 +10,14 @@ const faceSchema = new Schema({
     descriptions: {
         type: Array,
         required: true
+    },
+    student: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Student'
     }
 }, {
     timestamps: true
 });
 
-export default mongoose.model("Face", faceSchema);
+const Face = mongoose.model("Face", faceSchema);
+export default Face;

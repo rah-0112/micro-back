@@ -19,14 +19,15 @@ const adminSchema = new Schema({
     id: {
         type: String
     },
-    noOfClasses: {
-        type: Number,
-        default: 0
-    }
+    courses: [ {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Course'
+    } ]
 }, {
     timestamps: true
 });
 
-export default mongoose.model('Admin', adminSchema);
+const Admin = mongoose.model('Admin', adminSchema);
+export default Admin;
 
 
