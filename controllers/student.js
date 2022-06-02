@@ -1,7 +1,9 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-import Student from '../mongoose_models/studentModel';
+import Student from '../mongoose_models/studentModel.js';
+import Admin from '../mongoose_models/adminModel.js';
+import Face from '../mongoose_models/faceModel.js';
 
 export const signin = async (req, res) => {
 

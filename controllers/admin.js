@@ -1,7 +1,7 @@
-import Admin from '../mongoose_models/adminModel';
-import Student from '../mongoose_model/studentModel';
+import Admin from '../mongoose_models/adminModel.js';
+import Student from '../mongoose_models/studentModel.js';
 
-export const signin = async (req, res) => {
+export const signinAd = async (req, res) => {
 
     const { email, password } = req.body;
     try {
@@ -22,11 +22,11 @@ export const signin = async (req, res) => {
     }
 }
 
-export const signup = async (req, res) => {
+export const signupAd = async (req, res) => {
     const { firstname, lastname, email, password, confirmPassword, noOfClasses } = req.body;
 
     try {
-        const existingUser = await User.findOne({ email });
+        const existingUser = await Admin.findOne({ email });
 
         if (existingUser) return res.status(404).json({ message: "User already exist." });
 
@@ -34,7 +34,7 @@ export const signup = async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 12);
 
-        const result = await User.create({ email, password: hashedPassword, name: `${firstname} ${lastname}`, noOfClasses });
+        const result = await Admin.create({ email, password: hashedPassword, name: `${firstname} ${lastname}`, noOfClasses });
 
         const token = jwt.sign({ email: result.email, id: result._id }, 'test', { expiresIn: '1h' });
         res.status(200).json({ result, token });
@@ -45,14 +45,18 @@ export const signup = async (req, res) => {
 }
 
 export const students = async (req, res) => {
-    const { admin_id } = req.body;
-    await Student.find({ admin: admin_id })
-        .populate("admin")
+    const { adminEmail } = req.body;
+    const admin = await Admin.findOne({ email: adminEmail });
+    await Student.find({ admin })
         .then(
             (students) => {
-                res.statusCode = 200;
-                res.setHeader("Content-Type", "application/json");
-                res.json(students);
+                if (students === null) {
+                    res.status(404).json({ message: 'No students available for the admin' });
+                } else {
+                    res.statusCode = 200;
+                    res.setHeader("Content-Type", "application/json");
+                    res.json(students);
+                }
             },
             (err) => next(err)
         )
